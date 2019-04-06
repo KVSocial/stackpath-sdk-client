@@ -1,0 +1,20 @@
+{
+    "name": "kyvio/stackpath-sdk-client",
+    "description": "StackPath SDK / Client in PHP from Kyvio",
+    "type": "library",
+    "require": {  
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Steven van der Peijl",
+            "email": "steven@kvsocial.com"
+        }
+    ],
+    "autoload": {
+      "psr-0": {
+        "StackPath": "src/"
+      }
+    }
+}
