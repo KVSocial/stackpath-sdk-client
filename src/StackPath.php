@@ -397,7 +397,249 @@ class StackPath
             return false;    
         }        
     }
-    
+
+    /**
+     * @param string $domain The name of the DNS zone's domain.
+     * @param boolean $useApexDomain Whether or not to create a zone for the apex domain only.
+     * If this is true and a domain with subdomains is provided, it will be stripped and only the root domain will be used for the zone. If this is false an error will be returned if it's not already an apex domain.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function createDNSZone($domain, $useApexDomain = true){
+        try {
+            $params = [ \GuzzleHttp\RequestOptions::JSON => [
+                'stackId' => $this->config['stack_id'],
+                'domain' => $domain,
+                'useApexDomain' => $useApexDomain
+            ]
+            ];
+            $response = $this->post('/dns/v1/stacks/'.$this->config['stack_id'].'/zones',$params);
+            if(empty($response)){
+                throw new \Exception(__LINE__.'Empty response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+            }
+            elseif(empty($response->zone)){
+                throw new \Exception(__LINE__.' Bad  response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($response,true));
+            }
+            else{
+                return $response;
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+
+
+    /**
+     * Retrieve all DNS zones on a stack or for a domain
+     * @param string $domain The name of the DNS zone's domain.(Optional)
+     * @param $page_request_first The number of items desired.
+     * @param $page_request_after The cursor value after which data will be returned.
+     * @param $page_request_filter SQL-style constraint filters.
+     * @param $page_request_sort_by Sort the response by the given field.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function listDNSZones($domain = "", $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
+        try {
+           $queryParams = [];
+            $addParams = "";
+           if(is_numeric($page_request_first)) {
+               $queryParams[] = "page_request.first=" . $page_request_first;
+           }
+            if(is_numeric($page_request_after)) {
+                $queryParams[] = "page_request.after=" . $page_request_after;
+            }
+            if($page_request_filter != "") {
+                $queryParams[] = "page_request.filter=" . $page_request_first;
+            }
+            if(is_numeric($page_request_sort_by)) {
+                $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
+            }
+            if(count($queryParams) > 0) {
+                $addParams = "?" . implode("&", $queryParams);
+            }
+            $response = $this->get('/dns/v1/stacks/'.$this->config['stack_id'].'/zones' . $addParams,[]);
+            if(empty($response)){
+                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones. Response: '.var_dump($this->debuglog(),true));
+            }
+            elseif(empty($response->zones)){
+                throw new \Exception(__LINE__.' No DNS Zones Found');
+            }
+            else{
+                if($domain != "") {
+                    $zones = $response->zones;
+                    $foundZone = false;
+                    foreach($zones as $eachZone) {
+                        if($eachZone->domain == $domain) {
+                            $foundZone = true;
+                            return $eachZone;
+                        }
+                    }
+                    if(!$foundZone) {
+                        throw new \Exception(__LINE__.' No DNS Zones Found for domain' . $domain);
+                    }
+                }
+                return $response;
+            }
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Delete DNS Zone for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @returns boolean true if deleted, false if not
+     */
+    public function deleteDNSZone($domain){
+        try {
+            if($domain != "") {
+                $zone_id = $this->getDNSZone($domain);
+                if($zone_id != "") {
+                    $this->delete('/dns/v1/stacks/'.$this->config['stack_id'].'/zones/'.$zone_id, []);
+                    if($this->statuscode == "204"){
+                        return true;
+                    }
+                    else{
+                        return false;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Get DNS Zone Id for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @returns integer Zone Id
+     */
+    public function getDNSZone($domain){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    return $zone_id;
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+                $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Create/Update multiple DNS zone resource records for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @param $records The records to create or update in the DNS zone.
+     **/
+    public function createMultipleDNSZoneRecords($domain, $records = null){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    $params = [ \GuzzleHttp\RequestOptions::JSON => [
+                        'records' => $records
+                    ]
+                    ];
+                    $response = $this->post('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/bulk/records', $params);
+                    if(empty($response)){
+                        throw new \Exception(__LINE__.'Empty response from SP api creating Multiple DNS Zone Records for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+                    }
+                    else{
+                        return $response;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Retrieve a DNS zone's resource records via domain
+     * @param string $domain The name of the DNS zone's domain.(Optional)
+     * @param $page_request_first The number of items desired.
+     * @param $page_request_after The cursor value after which data will be returned.
+     * @param $page_request_filter SQL-style constraint filters.
+     * @param $page_request_sort_by Sort the response by the given field.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function listDNSZonesRecords($domain, $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    $queryParams = [];
+                    $addParams = "";
+                    if(is_numeric($page_request_first)) {
+                        $queryParams[] = "page_request.first=" . $page_request_first;
+                    }
+                    if(is_numeric($page_request_after)) {
+                        $queryParams[] = "page_request.after=" . $page_request_after;
+                    }
+                    if($page_request_filter != "") {
+                        $queryParams[] = "page_request.filter=" . $page_request_first;
+                    }
+                    if(is_numeric($page_request_sort_by)) {
+                        $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
+                    }
+                    if(count($queryParams) > 0) {
+                        $addParams = "?" . implode("&", $queryParams);
+                    }
+                    $response = $this->get('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/records' . $addParams,[]);
+                    if(empty($response)){
+                        throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones Records. Response: '.var_dump($this->debuglog(),true));
+                    }
+                    else{
+                        return $response;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+
+
     /**
     * Shorthand method for GET requests
     *
