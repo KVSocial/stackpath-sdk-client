@@ -99,39 +99,20 @@ class StackPath
         if(empty($response) || !is_object($response)){
             throw new \Exception(__LINE__.' Empty response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($this->debuglog(),true));   
         } 
-        elseif(empty($response->site)){
-            //something is wrong still..
-            if(!empty($response->code)){
-                //some error was returned
-                if($response->code == 6){
-                    //ok site already exists.. so lets return all info it would also return if just created!
-                    //stupid api doesn't return site_id from existing one so we need to search it - extremely ineffective I may add
-                    $allsites = $this->getAllCDNSites();
-                    $existingsitedata = [];
-                    if(isset($allsites[$domain])){
-                        $site = $allsites[$domain];
-                        $existingsitedata = $this->getCDNCertData($site['id'],$domain);
-                        $existingsitedata['cdn_url'] = $this->getCnameForSite($site['id']);                    
-                        $existingsitedata['site_id'] = $site['id'];
-                        $existingsitedata['site_exists'] = 1;
-                        $existingsitedata['status'] = "stackpath_call_done";
-                        $response = (object) $existingsitedata; 
-                        return $response;                  
-                    }
-                    else{
-                        //probably mismatch of $domain in our db and name of site (label - which is bad method to check but how else can I get delivery domains?!)
-                        //in SP.
-                        $msg = $domain.' Needs to be updated manually in our db. Does not match with any SP label';
-                        $this->debuglog($msg);
-                        throw new \Exception(__LINE__.' '.$msg);   
-                    }
-                }
-                else{
-                    throw new \Exception(__LINE__.' Bad  response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($response,true));   
-                }             
+        elseif(property_exists($response, "site")){
+            if(property_exists($response->site, "id")) {
+                $site = $response->site;
+                $siteId = $site->id;
+                $existingsitedata = $this->getCDNCertData($siteId,$domain);
+                $existingsitedata['cdn_url'] = $this->getCnameForSite($siteId);
+                $existingsitedata['site_id'] = $siteId;
+                $existingsitedata['site_exists'] = 1;
+                $existingsitedata['status'] = "stackpath_call_done";
+                $response = (object) $existingsitedata;
+                return $response;
             }
             else{
-                throw new \Exception(__LINE__.' Bad  response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($response,true));   
+                throw new \Exception(__LINE__.' Bad  response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($response,true));
             }
         }
         else{
@@ -201,7 +182,7 @@ class StackPath
         foreach ($responseWafPolicies->policyGroups as $policyGroup) {
             foreach ($policyGroup->policies as $policy) {
                 if(in_array($policy->name,$on)){
-                    $this->post('/waf/v1/stacks/'.$stackPath['stack_id'].'/sites/'.$config['waf_id'].'/policy_groups/'.$policyGroup->id.'/policies/'.$policy->id.'/enable',[]);
+                    $this->post('/waf/v1/stacks/' . $this->config['stack_id'].'/sites/'. $waf_site_id .'/policy_groups/'.$policyGroup->id.'/policies/'.$policy->id.'/enable',[]);
                     if($this->statuscode != "204"){
                         $issues[] = $policy->name. " not enabled";    
                     }
@@ -209,7 +190,7 @@ class StackPath
                 }
                 elseif(in_array($policy->name, $off)){
                     // Disable policy
-                    $this->post('/waf/v1/stacks/'.$stackPath['stack_id'].'/sites/'.$config['waf_id'].'/policy_groups/'.$policyGroup->id.'/policies/'.$policy->id.'/disable',[]);
+                    $this->post('/waf/v1/stacks/' . $this->config['stack_id'].'/sites/'. $waf_site_id .'/policy_groups/'.$policyGroup->id.'/policies/'.$policy->id.'/disable',[]);
                     if($this->statuscode != "204"){
                         $issues[] = $policy->name. " not disabled";    
                     }
@@ -305,54 +286,42 @@ class StackPath
     }
     
     /**
-    * @param INT $batch Number of how many sites to get per API call
-    * @returns array $allcdnsites Array with as keys the hostnames and as value an array with all data from the API
+     * @param INT $page_request_first The number of items desired.
+     * @param INT $page_request_after The cursor value after which data will be returned.
+     * @param string $page_request_filter SQL-style constraint filters.
+     * @param string $page_request_sort_by Sort the response by the given field.
+     * @returns array $allcdnsites Array with as keys the hostnames and as value an array with all data from the API
     **/
-    public function getAllCDNSites($batch = 20){
-        if(is_array($this->allsites) && count ($this->allsites) > 0 ){
-            return $this->allsites;    
-        }        
-        
-        $allcdnsites = [];
-        $totapicount = 10;//arbitrary nr to get started
-        $totc = 0;$runs = 0;
-        //$this->debuglog('Batch: '.$batch);
-            
-        while($totapicount > 0){
-            $runs++;
-            //$this->debuglog('Runs: '.$runs.' Totapicount: '.$totapicount);
-            $response = $this->get('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites?page_request.first='.$batch.'&page_request.after='.$totc,[]);
-            if(!empty($response->results) ) {
-                if($runs == 1){
-                    $totapicount = $response->pageInfo->totalCount;
-                    //$this->debuglog('totapicount: '.$totapicount);
-                    if(!is_numeric($totapicount)){
-                        throw new \Exception('Code/API error - Response: '.var_dump($response,true));    
-                    }
-                }
-                    
-                //now loop over each entry
-                foreach($response->results as $k => $site){
-                    //$this->debuglog('In foreach. Hostname: '.$site->label);
-                    $allcdnsites[$site->label] = (array) $site;
-                    $totapicount--;
-                    $totc++;
-                }
+    public function getAllCDNSites($page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
+        try {
+            $queryParams = [];
+            $addParams = "";
+            if(is_numeric($page_request_first)) {
+                $queryParams[] = "page_request.first=" . $page_request_first;
+            }
+            if(is_numeric($page_request_after)) {
+                $queryParams[] = "page_request.after=" . $page_request_after;
+            }
+            if($page_request_filter != "") {
+                $queryParams[] = "page_request.filter=" . $page_request_first;
+            }
+            if(is_numeric($page_request_sort_by)) {
+                $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
+            }
+            if(count($queryParams) > 0) {
+                $addParams = "?" . implode("&", $queryParams);
+            }
+            $response = $this->get('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites' . $addParams,[]);
+            if(empty($response)){
+                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones. Response: '.var_dump($this->debuglog(),true));
             }
             else{
-                //seems we ran out?
-                $totapicount = 0;
-                if($runs == 1){
-                    throw new \Exception(__LINE__.'API error - empty Response: '.var_dump($response,true));    
-                }                
-            }
-            
-            if($totapicount > 0){
-                sleep(3); //sleep 3 seconds to not kill the API
+                return $response;
             }
         }
-        $this->allsites = $allcdnsites;
-        return $allcdnsites;        
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
     }
     
     /**
@@ -397,7 +366,305 @@ class StackPath
             return false;    
         }        
     }
-    
+
+    /**
+     * @param string $domain The name of the DNS zone's domain.
+     * @param boolean $useApexDomain Whether or not to create a zone for the apex domain only.
+     * If this is true and a domain with subdomains is provided, it will be stripped and only the root domain will be used for the zone. If this is false an error will be returned if it's not already an apex domain.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function createDNSZone($domain, $useApexDomain = true){
+        try {
+            $params = [ \GuzzleHttp\RequestOptions::JSON => [
+                'stackId' => $this->config['stack_id'],
+                'domain' => $domain,
+                'useApexDomain' => $useApexDomain
+            ]
+            ];
+            $response = $this->post('/dns/v1/stacks/'.$this->config['stack_id'].'/zones',$params);
+            if(empty($response)){
+                throw new \Exception(__LINE__.'Empty response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+            }
+            elseif(empty($response->zone)){
+                throw new \Exception(__LINE__.' Bad  response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($response,true));
+            }
+            else{
+                return $response;
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+
+
+    /**
+     * Retrieve all DNS zones on a stack or for a domain
+     * @param string $domain The name of the DNS zone's domain.(Optional)
+     * @param $page_request_first The number of items desired.
+     * @param $page_request_after The cursor value after which data will be returned.
+     * @param $page_request_filter SQL-style constraint filters.
+     * @param $page_request_sort_by Sort the response by the given field.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function listDNSZones($domain = "", $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
+        try {
+           $queryParams = [];
+            $addParams = "";
+           if(is_numeric($page_request_first)) {
+               $queryParams[] = "page_request.first=" . $page_request_first;
+           }
+            if(is_numeric($page_request_after)) {
+                $queryParams[] = "page_request.after=" . $page_request_after;
+            }
+            if($page_request_filter != "") {
+                $queryParams[] = "page_request.filter=" . $page_request_first;
+            }
+            if(is_numeric($page_request_sort_by)) {
+                $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
+            }
+            if(count($queryParams) > 0) {
+                $addParams = "?" . implode("&", $queryParams);
+            }
+            $response = $this->get('/dns/v1/stacks/'.$this->config['stack_id'].'/zones' . $addParams,[]);
+            if(empty($response)){
+                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones. Response: '.var_dump($this->debuglog(),true));
+            }
+            elseif(empty($response->zones)){
+                throw new \Exception(__LINE__.' No DNS Zones Found');
+            }
+            else{
+                if($domain != "") {
+                    $zones = $response->zones;
+                    $foundZone = false;
+                    foreach($zones as $eachZone) {
+                        if($eachZone->domain == $domain) {
+                            $foundZone = true;
+                            return $eachZone;
+                        }
+                    }
+                    if(!$foundZone) {
+                        throw new \Exception(__LINE__.' No DNS Zones Found for domain' . $domain);
+                    }
+                }
+                return $response;
+            }
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Delete DNS Zone for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @returns boolean true if deleted, false if not
+     */
+    public function deleteDNSZone($domain){
+        try {
+            if($domain != "") {
+                $zone_id = $this->getDNSZone($domain);
+                if($zone_id != "") {
+                    $this->delete('/dns/v1/stacks/'.$this->config['stack_id'].'/zones/'.$zone_id, []);
+                    if($this->statuscode == "204"){
+                        return true;
+                    }
+                    else{
+                        return false;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Get DNS Zone Id for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @returns integer Zone Id
+     */
+    public function getDNSZone($domain){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    return $zone_id;
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+                $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Create/Update multiple DNS zone resource records for a domain
+     * @param string $domain The name of the DNS zone's domain.
+     * @param $records The records to create or update in the DNS zone.
+     **/
+    public function createMultipleDNSZoneRecords($domain, $records = null){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    $params = [ \GuzzleHttp\RequestOptions::JSON => [
+                        'records' => $records
+                    ]
+                    ];
+                    $response = $this->post('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/bulk/records', $params);
+                    if(empty($response)){
+                        throw new \Exception(__LINE__.'Empty response from SP api creating Multiple DNS Zone Records for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+                    }
+                    else{
+                        return $response;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Retrieve a DNS zone's resource records via domain
+     * @param string $domain The name of the DNS zone's domain.(Optional)
+     * @param $page_request_first The number of items desired.
+     * @param $page_request_after The cursor value after which data will be returned.
+     * @param $page_request_filter SQL-style constraint filters.
+     * @param $page_request_sort_by Sort the response by the given field.
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function listDNSZonesRecords($domain, $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
+        try {
+            if($domain != "") {
+                $getZoneInfo = $this->listDNSZones($domain);
+                if(isset($getZoneInfo->id)) {
+                    $zone_id = $getZoneInfo->id;
+                    $queryParams = [];
+                    $addParams = "";
+                    if(is_numeric($page_request_first)) {
+                        $queryParams[] = "page_request.first=" . $page_request_first;
+                    }
+                    if(is_numeric($page_request_after)) {
+                        $queryParams[] = "page_request.after=" . $page_request_after;
+                    }
+                    if($page_request_filter != "") {
+                        $queryParams[] = "page_request.filter=" . $page_request_first;
+                    }
+                    if(is_numeric($page_request_sort_by)) {
+                        $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
+                    }
+                    if(count($queryParams) > 0) {
+                        $addParams = "?" . implode("&", $queryParams);
+                    }
+                    $response = $this->get('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/records' . $addParams,[]);
+                    if(empty($response)){
+                        throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones Records. Response: '.var_dump($this->debuglog(),true));
+                    }
+                    else{
+                        return $response;
+                    }
+                }
+                else {
+                    throw new \Exception(__LINE__.' Zone not found');
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Scan a domain name for information about its provider
+     * @param string $domain The domain name to scan for provider information
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function scanDomain($domain){
+        try {
+            if($domain != "") {
+               $response = $this->get('dns/v1/discovery/' . $domain . '/provider_details',[]);
+               if(empty($response)){
+                  throw new \Exception(__LINE__.'Empty response from SP api scanning domain' . $domain . 'Response: '.var_dump($this->debuglog(),true));
+               }
+               else{
+                  return $response;
+               }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+    /**
+     * Scan a domain name for its resource records
+     * @param string $domain The domain name to scan for provider information
+     * @returns object API JSON decoded response object is returned
+     **/
+    public function scanDomainForRecords($domain, $dnsProvider = "GENERAL", $authenticationUser = "", $apiKey = ""){
+        try {
+            if($domain != "") {
+                $params = [ \GuzzleHttp\RequestOptions::JSON => [
+                    'dnsProvider' => $dnsProvider,
+                    'authenticationUser' => $authenticationUser,
+                    'apiKey' => $apiKey
+                ]
+                ];
+                $response = $this->post('dns/v1/discovery/' . $domain . '/records',$params);
+                if(empty($response)){
+                    throw new \Exception(__LINE__.'Empty response from SP api scanning domain for resource records' . $domain . 'Response: '.var_dump($this->debuglog(),true));
+                }
+                else{
+                    return $response;
+                }
+            }
+            else {
+                throw new \Exception(__LINE__.' Domain value is empty');
+            }
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->returnGuzzleException($e);
+        }
+    }
+
+
+
     /**
     * Shorthand method for GET requests
     *
