@@ -24,9 +24,6 @@ class StackPath
 {
     public $gateway = "https://gateway.stackpath.com";
     public $config = [];
-    public $debug = false; //guzzle debug
-    public $debugmsg = true; //last debug message
-    public $debugdat = false; //for this class
     public $statuscode = false; //to get statuscode from last call
     public $allsites = false; //buffer due to poor API design
     
@@ -66,10 +63,10 @@ class StackPath
         //]]);
         
         if(empty($tokenres)){
-            throw new \Exception(__LINE__.' Empty response from SP api. Response: \n'.var_dump($this->debuglog(),true));   
+            throw new \Exception(__LINE__.' Empty response from SP api. Response: \n');
         } 
         elseif(empty($tokenres->access_token)){
-            throw new \Exception(__LINE__.' Bad response '.$this->statuscode.' from SP api. Response: \n'.var_dump($tokenres,true));   
+            throw new \Exception(__LINE__.' Bad response '.$this->statuscode.' from SP api. Response: \n');
         }
         else{
             $this->token = $tokenres->access_token;
@@ -97,7 +94,7 @@ class StackPath
 
         $response = $this->post('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites',$params);                
         if(empty($response) || !is_object($response)){
-            throw new \Exception(__LINE__.' Empty response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($this->debuglog(),true));   
+            throw new \Exception(__LINE__.' Empty response from SP api creating CDN site for '.$domain. ' Response: '.var_dump($response,true));
         } 
         elseif(property_exists($response, "site")){
             if(property_exists($response->site, "id")) {
@@ -151,7 +148,7 @@ class StackPath
             
         $response = $this->post('/waf/v1/stacks/'.$this->config['stack_id'].'/sites',$params);
         if(empty($response)){
-            throw new \Exception(__LINE__.'Empty response from SP api creating WAF site for '.$domain. ' Response: '.var_dump($this->debuglog(),true));    
+            throw new \Exception(__LINE__.'Empty response from SP api creating WAF site for '.$domain);
         }
         elseif(empty($response->site)){
             throw new \Exception(__LINE__.' Bad  response from SP api creating WAF site for '.$domain. ' Response: '.var_dump($response,true));   
@@ -174,7 +171,7 @@ class StackPath
         
         $responseWafPolicies = $this->get('/waf/v1/stacks/'.$this->config['stack_id'].'/sites/'.$waf_site_id.'/policy_groups',[]);
         if(empty($responseWafPolicies) ){
-            throw new \Exception('Invalid response from SP api getting WAF options for WAF site id: '.$waf_site_id. ' Response: '.var_dump($this->debuglog(),true));    
+            throw new \Exception('Invalid response from SP api getting WAF options for WAF site id: '.$waf_site_id);
         }
         
         $alloptions = array_merge($on,$off);
@@ -293,7 +290,6 @@ class StackPath
      * @returns array $allcdnsites Array with as keys the hostnames and as value an array with all data from the API
     **/
     public function getAllCDNSites($page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
-        try {
             $queryParams = [];
             $addParams = "";
             if(is_numeric($page_request_first)) {
@@ -313,15 +309,13 @@ class StackPath
             }
             $response = $this->get('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites' . $addParams,[]);
             if(empty($response)){
-                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones. Response: '.var_dump($this->debuglog(),true));
+                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones.');
             }
             else{
                 return $response;
             }
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
+
+
     }
     
     /**
@@ -374,7 +368,6 @@ class StackPath
      * @returns object API JSON decoded response object is returned
      **/
     public function createDNSZone($domain, $useApexDomain = true){
-        try {
             $params = [ \GuzzleHttp\RequestOptions::JSON => [
                 'stackId' => $this->config['stack_id'],
                 'domain' => $domain,
@@ -383,7 +376,7 @@ class StackPath
             ];
             $response = $this->post('/dns/v1/stacks/'.$this->config['stack_id'].'/zones',$params);
             if(empty($response)){
-                throw new \Exception(__LINE__.'Empty response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+                throw new \Exception(__LINE__.'Empty response from SP api creating DNS Zone for '.$domain);
             }
             elseif(empty($response->zone)){
                 throw new \Exception(__LINE__.' Bad  response from SP api creating DNS Zone for '.$domain. ' Response: '.var_dump($response,true));
@@ -391,11 +384,6 @@ class StackPath
             else{
                 return $response;
             }
-
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
 
@@ -410,7 +398,6 @@ class StackPath
      * @returns object API JSON decoded response object is returned
      **/
     public function listDNSZones($domain = "", $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
-        try {
            $queryParams = [];
             $addParams = "";
            if(is_numeric($page_request_first)) {
@@ -430,7 +417,7 @@ class StackPath
             }
             $response = $this->get('/dns/v1/stacks/'.$this->config['stack_id'].'/zones' . $addParams,[]);
             if(empty($response)){
-                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones. Response: '.var_dump($this->debuglog(),true));
+                throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones.');
             }
             elseif(empty($response->zones)){
                 throw new \Exception(__LINE__.' No DNS Zones Found');
@@ -451,10 +438,6 @@ class StackPath
                 }
                 return $response;
             }
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -463,7 +446,6 @@ class StackPath
      * @returns boolean true if deleted, false if not
      */
     public function deleteDNSZone($domain){
-        try {
             if($domain != "") {
                 $zone_id = $this->getDNSZone($domain);
                 if($zone_id != "") {
@@ -482,11 +464,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -495,7 +472,6 @@ class StackPath
      * @returns integer Zone Id
      */
     public function getDNSZone($domain){
-        try {
             if($domain != "") {
                 $getZoneInfo = $this->listDNSZones($domain);
                 if(isset($getZoneInfo->id)) {
@@ -509,11 +485,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-                $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -522,7 +493,6 @@ class StackPath
      * @param $records The records to create or update in the DNS zone.
      **/
     public function createMultipleDNSZoneRecords($domain, $records = null){
-        try {
             if($domain != "") {
                 $getZoneInfo = $this->listDNSZones($domain);
                 if(isset($getZoneInfo->id)) {
@@ -533,7 +503,7 @@ class StackPath
                     ];
                     $response = $this->post('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/bulk/records', $params);
                     if(empty($response)){
-                        throw new \Exception(__LINE__.'Empty response from SP api creating Multiple DNS Zone Records for '.$domain. ' Response: '.var_dump($this->debuglog(),true));
+                        throw new \Exception(__LINE__.'Empty response from SP api creating Multiple DNS Zone Records for '.$domain);
                     }
                     else{
                         return $response;
@@ -546,11 +516,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -563,7 +528,6 @@ class StackPath
      * @returns object API JSON decoded response object is returned
      **/
     public function listDNSZonesRecords($domain, $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
-        try {
             if($domain != "") {
                 $getZoneInfo = $this->listDNSZones($domain);
                 if(isset($getZoneInfo->id)) {
@@ -587,7 +551,7 @@ class StackPath
                     }
                     $response = $this->get('/dns/v1/stacks/' . $this->config['stack_id'] . '/zones/' . $zone_id . '/records' . $addParams,[]);
                     if(empty($response)){
-                        throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones Records. Response: '.var_dump($this->debuglog(),true));
+                        throw new \Exception(__LINE__.'Empty response from SP api listing  DNS Zones Records.');
                     }
                     else{
                         return $response;
@@ -600,11 +564,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -613,11 +572,10 @@ class StackPath
      * @returns object API JSON decoded response object is returned
      **/
     public function scanDomain($domain){
-        try {
             if($domain != "") {
                $response = $this->get('dns/v1/discovery/' . $domain . '/provider_details',[]);
                if(empty($response)){
-                  throw new \Exception(__LINE__.'Empty response from SP api scanning domain' . $domain . 'Response: '.var_dump($this->debuglog(),true));
+                  throw new \Exception(__LINE__.'Empty response from SP api scanning domain' . $domain);
                }
                else{
                   return $response;
@@ -626,10 +584,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
     /**
@@ -638,7 +592,6 @@ class StackPath
      * @returns object API JSON decoded response object is returned
      **/
     public function scanDomainForRecords($domain, $dnsProvider = "GENERAL", $authenticationUser = "", $apiKey = ""){
-        try {
             if($domain != "") {
                 $params = [ \GuzzleHttp\RequestOptions::JSON => [
                     'dnsProvider' => $dnsProvider,
@@ -648,7 +601,7 @@ class StackPath
                 ];
                 $response = $this->post('dns/v1/discovery/' . $domain . '/records',$params);
                 if(empty($response)){
-                    throw new \Exception(__LINE__.'Empty response from SP api scanning domain for resource records' . $domain . 'Response: '.var_dump($this->debuglog(),true));
+                    throw new \Exception(__LINE__.'Empty response from SP api scanning domain for resource records' . $domain);
                 }
                 else{
                     return $response;
@@ -657,10 +610,6 @@ class StackPath
             else {
                 throw new \Exception(__LINE__.' Domain value is empty');
             }
-        }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
-            $this->returnGuzzleException($e);
-        }
     }
 
 
@@ -821,11 +770,6 @@ class StackPath
         
         $payload = array_merge_recursive($payload_defaults, $payload);
         $res = false;$success = false;
-        
-        $this->debuglog($method);
-        $this->debuglog($url);
-        $this->debuglog($payload);
-        
         try {
             /** Fires the request */
             $res = $this->client->request($method, $url, $payload);
@@ -843,15 +787,7 @@ class StackPath
                 $res = json_decode($exception);
                 $this->statuscode = $e->getCode(); //http code
             } 
-            
-            if($this->debugdat) {
-                $this->debuglog("Request failed");
-                $this->debuglog(var_dump($exception, true));
-                $this->debuglog(var_dump($e, true));
-            }
-        } 
-        
-        
+        }
         $response = false;
         if(is_object($res) && $success == true){
             if($res->getBody()){
@@ -860,21 +796,18 @@ class StackPath
                 $response = json_decode($res->getBody()->getContents());
             }
             else{
-                $this->debuglog($res);
-                $response = $res;    
+                throw new \Exception(__LINE__.'Empty response from SP API.');
             }
         }
         else{
-            $this->debuglog($res);
-            $response = $res;
+            if(property_exists($res, "message")){
+                throw new \Exception(__LINE__.$res->message);
+            }
+            else{
+                throw new \Exception(__LINE__.'Empty response from SP API.');
+            }
+
         }       
         return $response;
-    }
-    
-    public function debuglog($msg = false){
-        if($this->debugmsg == true && $msg != false){
-            $this->debugdat[] = $msg;
-        }
-        return $this->debugdat;    
     }
 }
