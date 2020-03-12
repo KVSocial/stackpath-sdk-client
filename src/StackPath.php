@@ -765,7 +765,9 @@ class StackPath
         
         /** Default payload options. Can be overriden by defining them in $opt["payload"] when supplied to this method */
         $payload_defaults = [
-          "allow_redirects" => true
+          "allow_redirects" => true,
+            'timeout' => 180,
+            'connect_timeout' => 180
         ];
         
         $payload = array_merge_recursive($payload_defaults, $payload);
