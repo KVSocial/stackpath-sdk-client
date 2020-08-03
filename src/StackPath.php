@@ -386,7 +386,54 @@ class StackPath
             }
     }
 
-
+    /**
+    * search CDN site By Domain
+    * @access public
+    * @param string $domain domain to search CDN site for. Obligatory
+    * @returns array SP API JSON decoded response array is returned
+    **/
+    public function searchCDNsiteByDomain($domain){
+        $totapicount = 10; // Normally one api call to list matching domain is enough, We try 10 api calls max, will update this in code based on response
+        $batch = 20; // each api call will have 20 sites max in result
+        $totc = 0;$runs = 0;
+        $matchingCdnSites = [];
+        while($totapicount > 0){
+            $totapicount--;
+            $runs++;
+            $url = '/cdn/v1/stacks/'.$this->config['stack_id'].'/sites?'."page_request.filter=scopes.hostnames.domain='".$domain."'&page_request.first=".$batch;
+            if($runs  > 1){ // after first api call append this too
+                $url .= '&page_request.after='.$totc;
+            }
+            $response = $this->get($url, []);
+            if(!empty($response->results) ) {
+                if($runs == 1){
+                    $totalCount = $response->pageInfo->totalCount;
+                    if(!is_numeric($totalCount)){
+                        throw new \Exception('Code/API error - Response: '.var_dump($response,true));    
+                    }
+                    $totapicount = ceil($totalCount/$batch); //Set total api call count
+                }
+                // Now loop over each entry
+                foreach($response->results as $k => $site){
+                    $matchingCdnSites[$site->label] = (array) $site;
+                    $totc++;
+                }
+                if(count($response->results) < $batch){ // Get out of the loop
+                    $totapicount = 0;
+                }
+            }
+            else{
+                $totapicount = 0; // Get out of the loop
+                if($runs == 1){
+                    throw new \Exception(__LINE__.'API error - empty Response: '.var_dump($response,true));    
+                }                
+            }
+            if($totapicount > 0){
+                sleep(1); //sleep 1 seconds to not kill the API
+            }
+        }
+        return $matchingCdnSites;
+    }
 
     /**
      * Retrieve all DNS zones on a stack or for a domain
