@@ -454,7 +454,7 @@ class StackPath
                 $queryParams[] = "page_request.after=" . $page_request_after;
             }
             if($page_request_filter != "") {
-                $queryParams[] = "page_request.filter=" . $page_request_first;
+                $queryParams[] = "page_request.filter=" . $page_request_filter;
             }
             if(is_numeric($page_request_sort_by)) {
                 $queryParams[] = "page_request.sort_by=" . $page_request_sort_by;
@@ -541,7 +541,7 @@ class StackPath
      **/
     public function createMultipleDNSZoneRecords($domain, $records = null){
             if($domain != "") {
-                $getZoneInfo = $this->listDNSZones($domain);
+                $getZoneInfo = $this->listDNSZones($domain, "", "","domain='".$domain."'");
                 if(isset($getZoneInfo->id)) {
                     $zone_id = $getZoneInfo->id;
                     $params = [ \GuzzleHttp\RequestOptions::JSON => [
