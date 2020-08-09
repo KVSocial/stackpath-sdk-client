@@ -520,7 +520,7 @@ class StackPath
      */
     public function getDNSZone($domain){
             if($domain != "") {
-                $getZoneInfo = $this->listDNSZones($domain);
+                $getZoneInfo = $this->listDNSZones($domain, "", "","domain='".$domain."'");
                 if(isset($getZoneInfo->id)) {
                     $zone_id = $getZoneInfo->id;
                     return $zone_id;
@@ -576,7 +576,7 @@ class StackPath
      **/
     public function listDNSZonesRecords($domain, $page_request_first = "", $page_request_after = "", $page_request_filter = "", $page_request_sort_by = "" ){
             if($domain != "") {
-                $getZoneInfo = $this->listDNSZones($domain);
+                $getZoneInfo = $this->listDNSZones($domain, "", "","domain='".$domain."'");
                 if(isset($getZoneInfo->id)) {
                     $zone_id = $getZoneInfo->id;
                     $queryParams = [];
