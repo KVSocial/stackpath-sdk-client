@@ -26,7 +26,7 @@ class StackPath
     public $config = [];
     public $statuscode = false; //to get statuscode from last call
     public $allsites = false; //buffer due to poor API design
-    
+    public $debug ='';
     /**
     * Instantiates the client
     *
