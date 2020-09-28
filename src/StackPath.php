@@ -409,7 +409,7 @@ class StackPath
                 if($runs == 1){
                     $totalCount = $response->pageInfo->totalCount;
                     if(!is_numeric($totalCount)){
-                        throw new \Exception('Code/API error - Response: '.var_dump($response,true));    
+                        throw new \Exception('Code/API error - Response: ');    
                     }
                     $totapicount = ceil($totalCount/$batch); //Set total api call count
                 }
@@ -425,7 +425,7 @@ class StackPath
             else{
                 $totapicount = 0; // Get out of the loop
                 if($runs == 1){
-                    throw new \Exception(__LINE__.'API error - empty Response: '.var_dump($response,true));    
+                    throw new \Exception(__LINE__.'API error - empty Response: ');    
                 }                
             }
             if($totapicount > 0){
