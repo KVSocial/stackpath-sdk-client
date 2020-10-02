@@ -322,8 +322,8 @@ class StackPath
     * @param string $cdn_site_id site ID string from SP API
     * @returns boolean true if deleted, false if not
     */    
-    public function deleteCDNSite($cdn_site_id){
-        $this->delete('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites/'.$cdn_site_id, []);
+    public function deleteCDNSite($cdn_site_id, $options = []){
+        $this->delete('/cdn/v1/stacks/'.$this->config['stack_id'].'/sites/'.$cdn_site_id, $options);
         if($this->statuscode == "204"){
             return true;
         }
@@ -816,7 +816,15 @@ class StackPath
             'timeout' => 180,
             'connect_timeout' => 180
         ];
-        
+        if(isset($payload['allow_redirects'])){
+            unset($payload_defaults['allow_redirects']);
+        }
+        if(isset($payload['timeout'])){
+            unset($payload_defaults['timeout']);
+        }
+        if(isset($payload['connect_timeout'])){
+            unset($payload_defaults['connect_timeout']);
+        }
         $payload = array_merge_recursive($payload_defaults, $payload);
         $res = false;$success = false;
         try {
@@ -849,8 +857,8 @@ class StackPath
             }
         }
         else{
-            if(property_exists($res, "message")){
-                throw new \Exception(__LINE__.$res->message);
+            if(method_exists($res, "getMessage")){
+                throw new \Exception(__LINE__.$res->getMessage());
             }
             else{
                 throw new \Exception(__LINE__.'Empty response from SP API.');
