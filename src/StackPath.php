@@ -853,10 +853,16 @@ class StackPath
                 $response = json_decode($res->getBody()->getContents());
             }
             else{
+                if(!empty($res->message)) {
+                    throw new \Exception($res->message);
+                }
                 throw new \Exception(__LINE__.'Empty response from SP API.');
             }
         }
         else{
+            if(!empty($res->message)) {
+                throw new \Exception($res->message);
+            }
             if(method_exists($res, "getMessage")){
                 throw new \Exception(__LINE__.$res->getMessage());
             }
