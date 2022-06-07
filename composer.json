@@ -3,7 +3,7 @@
     "description": "StackPath SDK / Client in PHP from Kyvio",
     "type": "library",
     "require": {  
-        "guzzlehttp/guzzle": "^7.4"
+        "guzzlehttp/guzzle": "6.3 - 7.4"
     },
     "license": "MIT",
     "authors": [
